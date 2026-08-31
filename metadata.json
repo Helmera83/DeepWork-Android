@@ -1,0 +1,6 @@
+{
+  "name": "TaskBreak AI",
+  "description": "AI-powered task breakdown assistant with time estimation, calendar integration, encrypted syncing, and progress tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

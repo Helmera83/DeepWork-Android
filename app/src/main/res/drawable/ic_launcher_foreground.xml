@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Central Node Structure and Branching Lines -->
+    <!-- Connecting Branch Lines -->
+    <path
+        android:pathData="M40,40 L68,40 M40,54 L68,54 M40,68 L68,68"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeColor="#818CF8" />
+        
+    <!-- Main Left Check / Step Marker -->
+    <path
+        android:pathData="M32,38 L36,42 L46,32"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="32"
+                android:startY="32"
+                android:endX="46"
+                android:endY="42"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#38BDF8" />
+                <item android:offset="1.0" android:color="#818CF8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtask Node 2 Indicator (Active/Progress) -->
+    <path
+        android:pathData="M34,54m-4.5,0a4.5,4.5 0 1,0 9,0a4.5,4.5 0 1,0 -9,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="29"
+                android:startY="49"
+                android:endX="39"
+                android:endY="59"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#F43F5E" />
+                <item android:offset="1.0" android:color="#FB7185" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtask Node 3 Indicator (Scheduled/Pending) -->
+    <path
+        android:pathData="M34,68m-4.5,0a4.5,4.5 0 1,0 9,0a4.5,4.5 0 1,0 -9,0"
+        android:strokeWidth="2.5"
+        android:strokeColor="#94A3B8"
+        android:fillColor="#00000000" />
+
+    <!-- Progress bars on right representing estimated completion times -->
+    <!-- Top task pill -->
+    <path
+        android:pathData="M52,37 L76,37"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeColor="#38BDF8" />
+    <path
+        android:pathData="M80,37 L82,37"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeColor="#BAE6FD" />
+
+    <!-- Mid task pill -->
+    <path
+        android:pathData="M52,54 L70,54"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeColor="#A855F7" />
+
+    <!-- Bottom task pill -->
+    <path
+        android:pathData="M52,71 L64,71"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeColor="#64748B" />
+
+    <!-- AI Sparkle in top right corner -->
+    <path
+        android:pathData="M78,24 C78,27 81,30 84,30 C81,30 78,33 78,36 C78,33 75,30 72,30 C75,30 78,27 78,24 Z"
+        android:fillColor="#FBBF24" />
+</vector>
+
