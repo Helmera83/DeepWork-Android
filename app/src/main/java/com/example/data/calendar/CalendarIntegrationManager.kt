@@ -74,11 +74,12 @@ class CalendarIntegrationManager(private val context: Context) {
     // Individual Subtask Timeblocks
     task.subtasks.forEachIndexed { index, sub ->
       val subDurationMillis = (sub.estimatedMinutes.coerceAtLeast(15)) * 60 * 1000L
-      val subEnd = currentSlotStart + subDurationMillis
+      val subStart = sub.scheduledStartTime ?: currentSlotStart
+      val subEnd = sub.scheduledEndTime ?: sub.dueDateTimestamp ?: (subStart + subDurationMillis)
       ics.appendLine("BEGIN:VEVENT")
       ics.appendLine("UID:subtask-${sub.id}@taskbreak.ai")
       ics.appendLine("DTSTAMP:$createdTimestamp")
-      ics.appendLine("DTSTART:${dateFormat.format(Date(currentSlotStart))}")
+      ics.appendLine("DTSTART:${dateFormat.format(Date(subStart))}")
       ics.appendLine("DTEND:${dateFormat.format(Date(subEnd))}")
       ics.appendLine("SUMMARY:${escapeIcsText("Step ${index + 1}: ${sub.title}")}")
       ics.appendLine("DESCRIPTION:${escapeIcsText("Part of ${task.title}\\n${sub.actionableNotes}")}")

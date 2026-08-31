@@ -69,6 +69,7 @@ import com.example.data.calendar.CalendarIntegrationManager
 import com.example.data.model.Priority
 import com.example.data.model.SubTask
 import com.example.data.model.Task
+import com.example.data.model.TaskCategory
 import com.example.ui.theme.BaselinePrimary
 import com.example.ui.theme.ExpressiveEmerald
 import com.example.ui.theme.PriorityHighColor
@@ -86,6 +87,15 @@ import java.util.Locale
 fun CalendarView(
   tasks: List<Task>,
   calendarManager: CalendarIntegrationManager,
+  isGeneratingAi: Boolean = false,
+  onInitiateBreakdown: ((
+    title: String,
+    category: TaskCategory,
+    priority: Priority,
+    description: String,
+    deadlineMillis: Long?
+  ) -> Unit)? = null,
+  onOpenVoiceCoach: (() -> Unit)? = null,
   onToggleSubtask: (subtask: SubTask, parentTask: Task) -> Unit,
   onStartTimer: (subtask: SubTask, parentTask: Task) -> Unit,
   onAddNewTask: (deadlineMillis: Long?) -> Unit,
@@ -98,6 +108,7 @@ fun CalendarView(
 
   val monthYearFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
   val dayDateFormat = remember { SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()) }
+  val chipDateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
 
   // Extract all tasks with deadlines or created dates mapped to calendar day keys
   fun getDayKey(timeMillis: Long): String {
@@ -137,6 +148,27 @@ fun CalendarView(
     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
+    // 0. Add & Schedule Task Input Card
+    if (onInitiateBreakdown != null) {
+      item {
+        TaskBreakdownInputCard(
+          isLoading = isGeneratingAi,
+          targetDateMillis = selectedDateCalendar.timeInMillis,
+          targetDateFormatted = chipDateFormat.format(selectedDateCalendar.time),
+          onInitiateBreakdown = { title, category, priority, description, deadline ->
+            onInitiateBreakdown(
+              title,
+              category,
+              priority,
+              description,
+              deadline ?: selectedDateCalendar.timeInMillis
+            )
+          },
+          onOpenVoiceCoach = onOpenVoiceCoach
+        )
+      }
+    }
+
     // 1. Calendar Navigation Header
     item {
       Surface(
@@ -552,8 +584,9 @@ private fun CalendarTaskCard(
   Surface(
     shape = RoundedCornerShape(16.dp),
     color = MaterialTheme.colorScheme.surface,
-    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-    shadowElevation = 1.dp,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    tonalElevation = 0.dp,
+    shadowElevation = 0.dp,
     modifier = Modifier.fillMaxWidth()
   ) {
     Column(modifier = Modifier.padding(16.dp)) {

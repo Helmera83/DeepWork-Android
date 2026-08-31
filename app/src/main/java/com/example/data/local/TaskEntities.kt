@@ -23,7 +23,7 @@ data class TaskEntity(
 )
 
 @Entity(
-  tableName = "subtasks",
+  tableName = "milestones",
   foreignKeys = [
     ForeignKey(
       entity = TaskEntity::class,
@@ -34,9 +34,32 @@ data class TaskEntity(
   ],
   indices = [Index(value = ["taskId"])]
 )
+data class MilestoneEntity(
+  @PrimaryKey val id: String,
+  val taskId: String,
+  val title: String,
+  val orderIndex: Int
+)
+
+@Entity(
+  tableName = "subtasks",
+  foreignKeys = [
+    ForeignKey(
+      entity = TaskEntity::class,
+      parentColumns = ["id"],
+      childColumns = ["taskId"],
+      onDelete = ForeignKey.CASCADE
+    )
+  ],
+  indices = [
+    Index(value = ["taskId"]),
+    Index(value = ["milestoneId"])
+  ]
+)
 data class SubTaskEntity(
   @PrimaryKey val id: String,
   val taskId: String,
+  val milestoneId: String? = null,
   val title: String,
   val estimatedMinutes: Int,
   val actualMinutes: Int,
@@ -46,9 +69,24 @@ data class SubTaskEntity(
   val milestoneTitle: String = "",
   val priority: String = "MEDIUM",
   val categoryTag: String = "",
-  val scheduledStartTime: Long?,
-  val scheduledEndTime: Long?,
-  val calendarEventId: String?
+  val scheduledStartTime: Long? = null,
+  val scheduledEndTime: Long? = null,
+  val dueDateTimestamp: Long? = null,
+  val calendarEventId: String? = null
+)
+
+data class TaskWithMilestonesAndSubtasksRelation(
+  @Embedded val task: TaskEntity,
+  @Relation(
+    parentColumn = "id",
+    entityColumn = "taskId"
+  )
+  val milestones: List<MilestoneEntity>,
+  @Relation(
+    parentColumn = "id",
+    entityColumn = "taskId"
+  )
+  val subtasks: List<SubTaskEntity>
 )
 
 data class TaskWithSubtasksRelation(
@@ -59,3 +97,4 @@ data class TaskWithSubtasksRelation(
   )
   val subtasks: List<SubTaskEntity>
 )
+

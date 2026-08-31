@@ -2,8 +2,11 @@ package com.example.data.ai
 
 import android.util.Log
 import com.example.BuildConfig
+import com.example.data.model.ChatMessage
+import com.example.data.model.ChatSender
 import com.example.data.model.Priority
 import com.example.data.model.SubTask
+import com.example.data.model.Task
 import com.example.data.model.TaskCategory
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,6 +69,7 @@ class GeminiBreakdownService {
       appendLine("   - Assign a realistic completion time estimate in minutes (e.g. 15, 25, 45, 60 mins).")
       appendLine("   - Assign an individual sub-task PRIORITY ('Urgent', 'High', 'Medium', or 'Low') based on dependencies and criticality.")
       appendLine("   - Assign a concise CATEGORY TAG (e.g. 'Research', 'Architecture', 'Design', 'Development', 'Testing', 'DevOps', 'Documentation', 'Review', 'Planning').")
+      appendLine("   - Assign a RECOMMENDED DUE DATE OFFSET ('dueDayOffset' as an integer representing number of days from today, e.g. 0 for today, 1 for tomorrow, 2 for 2 days out) to pace sub-tasks sequentially.")
       appendLine("   - Provide actionable notes/guidance.")
       appendLine()
       appendLine("Task Title: $taskTitle")
@@ -78,9 +82,9 @@ class GeminiBreakdownService {
         val formattedDate = sdf.format(Date(deadlineTimestamp))
         appendLine()
         appendLine("TARGET COMPLETION DEADLINE: $formattedDate (Allotted timeframe: $diffDays days)")
-        appendLine("CRITICAL SCHEDULING CONSTRAINT: Structure all milestones and subtasks so the total estimated effort and sequencing fit comfortably and realistically within this $diffDays-day allotted window.")
+        appendLine("CRITICAL SCHEDULING CONSTRAINT: Structure all milestones and subtasks with sequential due date offsets ('dueDayOffset': 0 to $diffDays) so each subtask has a dedicated deadline that fits comfortably and realistically within this $diffDays-day allotted window.")
       } else {
-        appendLine("Determine the optimal number of milestones and subtasks for complete, successful execution.")
+        appendLine("Determine the optimal number of milestones and subtasks with sequential due date offsets ('dueDayOffset') for complete, successful execution.")
       }
 
       appendLine()
@@ -99,6 +103,7 @@ class GeminiBreakdownService {
                   "estimatedMinutes": 30,
                   "priority": "High",
                   "categoryTag": "Development",
+                  "dueDayOffset": 0,
                   "actionableNotes": "Concrete execution guidance or key deliverable"
                 }
               ]
@@ -191,6 +196,7 @@ class GeminiBreakdownService {
       appendLine("- provide a realistic estimated time in minutes (5 to 120 mins)")
       appendLine("- assign sub-task priority ('Urgent', 'High', 'Medium', or 'Low')")
       appendLine("- assign a concise category tag (e.g. 'Testing', 'Refactor', 'Documentation', 'Review')")
+      appendLine("- assign a recommended due date offset ('dueDayOffset': integer representing days from today, e.g. 1, 2, 3)")
       appendLine()
       appendLine("Respond with valid raw JSON matching this schema:")
       appendLine("""
@@ -202,6 +208,7 @@ class GeminiBreakdownService {
               "estimatedMinutes": 25,
               "priority": "Medium",
               "categoryTag": "Testing",
+              "dueDayOffset": 1,
               "actionableNotes": "Concrete tips or key deliverables",
               "milestoneTitle": "Milestone name"
             }
@@ -295,7 +302,7 @@ class GeminiBreakdownService {
 
     val startOrder = task.subtasks.size
     val lastMilestone = task.subtasks.lastOrNull()?.milestoneTitle?.ifBlank { null } ?: "Milestone 2: Follow-up Actions"
-    val subtasks = filtered.take(count.coerceIn(1, filtered.size)).mapIndexed { idx, step ->
+    val rawSubtasks = filtered.take(count.coerceIn(1, filtered.size)).mapIndexed { idx, step ->
       val customTitle = if (userInstructions.isNotBlank() && idx == 0) "${step.title} ($userInstructions)" else step.title
       SubTask(
         id = UUID.randomUUID().toString(),
@@ -310,11 +317,60 @@ class GeminiBreakdownService {
       )
     }
 
+    val scheduledSubtasks = computeSubtaskDueDates(rawSubtasks, task.deadlineTimestamp)
+
     return BreakdownResult(
-      subtasks = subtasks,
-      aiExplanation = "Added ${subtasks.size} supplemental steps to reinforce your task execution plan.",
+      subtasks = scheduledSubtasks,
+      aiExplanation = "Added ${scheduledSubtasks.size} supplemental steps to reinforce your task execution plan with targeted due dates.",
       sourceModel = "Local Smart Planner"
     )
+  }
+
+  fun computeSubtaskDueDates(
+    subtasks: List<SubTask>,
+    deadlineTimestamp: Long?,
+    now: Long = System.currentTimeMillis()
+  ): List<SubTask> {
+    if (subtasks.isEmpty()) return emptyList()
+
+    val effectiveDeadline = if (deadlineTimestamp != null && deadlineTimestamp > now) {
+      deadlineTimestamp
+    } else {
+      val daysSpan = when {
+        subtasks.size <= 2 -> 1L
+        subtasks.size <= 4 -> 2L
+        subtasks.size <= 6 -> 3L
+        else -> (subtasks.size / 2L).coerceIn(3L, 7L)
+      }
+      now + (daysSpan * 86_400_000L)
+    }
+
+    val totalSpanMillis = (effectiveDeadline - now).coerceAtLeast(3_600_000L)
+    val n = subtasks.size
+
+    return subtasks.mapIndexed { index, sub ->
+      if (sub.dueDateTimestamp != null && sub.dueDateTimestamp > 0L) {
+        sub
+      } else {
+        val fraction = ((index + 1).toDouble() / n.toDouble()).coerceIn(0.1, 1.0)
+        val targetTimestamp = now + (totalSpanMillis * fraction).toLong()
+
+        val cal = java.util.Calendar.getInstance().apply {
+          timeInMillis = targetTimestamp
+          set(java.util.Calendar.HOUR_OF_DAY, 17)
+          set(java.util.Calendar.MINUTE, 0)
+          set(java.util.Calendar.SECOND, 0)
+          set(java.util.Calendar.MILLISECOND, 0)
+        }
+
+        val calculatedDueDate = cal.timeInMillis.coerceAtLeast(now + 1_800_000L)
+        sub.copy(
+          dueDateTimestamp = calculatedDueDate,
+          scheduledStartTime = calculatedDueDate - (sub.estimatedMinutes * 60_000L),
+          scheduledEndTime = calculatedDueDate
+        )
+      }
+    }
   }
 
   private fun parseJsonBreakdown(
@@ -335,6 +391,7 @@ class GeminiBreakdownService {
       val determinedPriority = if (priorityStr.isNotBlank()) Priority.fromString(priorityStr) else inferTaskPriority(taskTitle, taskDescription, deadlineTimestamp)
 
       val list = mutableListOf<SubTask>()
+      val now = System.currentTimeMillis()
 
       val milestonesArray = obj.optJSONArray("milestones")
       if (milestonesArray != null && milestonesArray.length() > 0) {
@@ -351,6 +408,17 @@ class GeminiBreakdownService {
             val subPriorityStr = subObj.optString("priority", "Medium")
             val subPriority = Priority.fromString(subPriorityStr)
             val categoryTag = subObj.optString("categoryTag", inferCategoryTag(title, determinedCategory))
+            val dueDayOffset = subObj.optInt("dueDayOffset", -1)
+            val explicitDueDate = if (dueDayOffset >= 0) {
+              val cal = java.util.Calendar.getInstance().apply {
+                timeInMillis = now + (dueDayOffset * 86_400_000L)
+                set(java.util.Calendar.HOUR_OF_DAY, 17)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+              }
+              cal.timeInMillis.coerceAtLeast(now + 1_800_000L)
+            } else null
 
             list.add(
               SubTask(
@@ -364,7 +432,10 @@ class GeminiBreakdownService {
                 actionableNotes = notes,
                 milestoneTitle = milestoneTitle,
                 priority = subPriority,
-                categoryTag = categoryTag
+                categoryTag = categoryTag,
+                dueDateTimestamp = explicitDueDate,
+                scheduledStartTime = explicitDueDate?.let { it - (estMin * 60_000L) },
+                scheduledEndTime = explicitDueDate
               )
             )
           }
@@ -381,6 +452,17 @@ class GeminiBreakdownService {
           val subPriorityStr = subObj.optString("priority", "Medium")
           val subPriority = Priority.fromString(subPriorityStr)
           val categoryTag = subObj.optString("categoryTag", inferCategoryTag(title, determinedCategory))
+          val dueDayOffset = subObj.optInt("dueDayOffset", -1)
+          val explicitDueDate = if (dueDayOffset >= 0) {
+            val cal = java.util.Calendar.getInstance().apply {
+              timeInMillis = now + (dueDayOffset * 86_400_000L)
+              set(java.util.Calendar.HOUR_OF_DAY, 17)
+              set(java.util.Calendar.MINUTE, 0)
+              set(java.util.Calendar.SECOND, 0)
+              set(java.util.Calendar.MILLISECOND, 0)
+            }
+            cal.timeInMillis.coerceAtLeast(now + 1_800_000L)
+          } else null
 
           list.add(
             SubTask(
@@ -394,7 +476,10 @@ class GeminiBreakdownService {
               actionableNotes = notes,
               milestoneTitle = milestoneTitle,
               priority = subPriority,
-              categoryTag = categoryTag
+              categoryTag = categoryTag,
+              dueDateTimestamp = explicitDueDate,
+              scheduledStartTime = explicitDueDate?.let { it - (estMin * 60_000L) },
+              scheduledEndTime = explicitDueDate
             )
           )
         }
@@ -403,8 +488,9 @@ class GeminiBreakdownService {
       if (list.isEmpty()) {
         generateSmartLocalBreakdown(taskId, taskTitle, taskDescription, deadlineTimestamp)
       } else {
+        val fullyScheduled = computeSubtaskDueDates(list, deadlineTimestamp)
         BreakdownResult(
-          subtasks = list,
+          subtasks = fullyScheduled,
           aiExplanation = explanation,
           sourceModel = modelName,
           determinedCategory = determinedCategory,
@@ -621,12 +707,219 @@ class GeminiBreakdownService {
       }
     }
 
+    val scheduledSubtasks = computeSubtaskDueDates(subtasks, deadlineTimestamp)
+
     return BreakdownResult(
-      subtasks = subtasks,
+      subtasks = scheduledSubtasks,
       aiExplanation = advice,
       sourceModel = "Local Smart Milestone Planner",
       determinedCategory = determinedCategory,
       determinedPriority = determinedPriority
     )
   }
+
+  suspend fun chatWithTaskCoach(
+    userMessage: String,
+    tasks: List<Task>,
+    conversationHistory: List<ChatMessage>
+  ): String = withContext(Dispatchers.IO) {
+    val apiKey = try {
+      BuildConfig.GEMINI_API_KEY
+    } catch (e: Throwable) {
+      ""
+    }
+
+    if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+      Log.d("GeminiBreakdown", "No active API key found, generating smart local task coach response")
+      return@withContext generateSmartLocalChatResponse(userMessage, tasks)
+    }
+
+    val url = "https://generativelanguage.googleapis.com/v1beta/models/$defaultModel:generateContent?key=$apiKey"
+
+    val prompt = buildString {
+      appendLine("You are TaskLogic AI, an elite productivity strategist, task execution coach, and supportive accountability partner.")
+      appendLine("Your purpose is to help the user conquer their tasks, defeat procrastination, structure time effectively, and maintain peak momentum.")
+      appendLine()
+      appendLine("=== CURRENT USER TASKS & PROGRESS ===")
+      if (tasks.isEmpty()) {
+        appendLine("No tasks currently recorded in the workspace.")
+      } else {
+        val completedCount = tasks.count { it.isFullyCompleted }
+        val totalCount = tasks.size
+        val pendingSubtasks = tasks.flatMap { it.subtasks }.count { !it.isCompleted }
+        appendLine("Overview: $completedCount of $totalCount tasks fully completed. $pendingSubtasks sub-tasks pending execution.")
+        appendLine()
+        tasks.forEachIndexed { i, task ->
+          val status = if (task.isFullyCompleted) "DONE" else "${task.completedSubtasksCount}/${task.totalSubtasksCount} steps completed"
+          val deadlineStr = task.formattedDeadline()?.let { " [Due: $it]" } ?: ""
+          appendLine("${i + 1}. [${task.priority.name}] [${task.category.label}] \"${task.title}\" ($status)$deadlineStr")
+          if (task.description.isNotBlank()) appendLine("   Context: ${task.description}")
+          task.subtasks.forEach { sub ->
+            val check = if (sub.isCompleted) "[X]" else "[ ]"
+            appendLine("   - $check ${sub.title} (${sub.estimatedMinutes}m • ${sub.priority.name})")
+          }
+        }
+      }
+      appendLine("=====================================")
+      appendLine()
+      appendLine("Guidelines for your response:")
+      appendLine("- Be concise, actionable, and encouraging. Use bullet points or numbered lists where helpful.")
+      appendLine("- Ground your advice in the user's ACTUAL tasks, deadlines, and priorities above.")
+      appendLine("- Highlight specific next sub-tasks to focus on right now.")
+      appendLine("- If the user asks for scheduling, suggest time blocks or a step-by-step roadmap.")
+      appendLine("- If the user expresses fatigue or overwhelm, provide high-impact micro-steps to restart momentum.")
+      appendLine()
+      if (conversationHistory.isNotEmpty()) {
+        appendLine("Recent Conversation:")
+        conversationHistory.takeLast(6).forEach { msg ->
+          val role = if (msg.sender == ChatSender.USER) "User" else "Assistant"
+          appendLine("$role: ${msg.content}")
+        }
+        appendLine()
+      }
+      appendLine("User's latest message: $userMessage")
+    }
+
+    val requestJson = JSONObject().apply {
+      val contentsArray = JSONArray().apply {
+        put(JSONObject().apply {
+          put("parts", JSONArray().apply {
+            put(JSONObject().put("text", prompt))
+          })
+        })
+      }
+      put("contents", contentsArray)
+
+      val generationConfig = JSONObject().apply {
+        put("temperature", 0.7)
+      }
+      put("generationConfig", generationConfig)
+    }
+
+    try {
+      val body = requestJson.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder()
+        .url(url)
+        .post(body)
+        .build()
+
+      val response = client.newCall(request).execute()
+      val responseString = response.body?.string()
+
+      if (!response.isSuccessful || responseString.isNullOrBlank()) {
+        Log.w("GeminiBreakdown", "Chatbot API call failed code ${response.code}: $responseString")
+        return@withContext generateSmartLocalChatResponse(userMessage, tasks)
+      }
+
+      val json = JSONObject(responseString)
+      val candidates = json.optJSONArray("candidates")
+      val firstCandidate = candidates?.optJSONObject(0)
+      val contentObj = firstCandidate?.optJSONObject("content")
+      val parts = contentObj?.optJSONArray("parts")
+      val rawText = parts?.optJSONObject(0)?.optString("text") ?: ""
+
+      if (rawText.isNotBlank()) rawText.trim() else generateSmartLocalChatResponse(userMessage, tasks)
+    } catch (e: Exception) {
+      Log.e("GeminiBreakdown", "Error in Gemini Chatbot", e)
+      generateSmartLocalChatResponse(userMessage, tasks)
+    }
+  }
+
+  private fun generateSmartLocalChatResponse(userMessage: String, tasks: List<Task>): String {
+    val q = userMessage.lowercase()
+    val incompleteTasks = tasks.filter { !it.isFullyCompleted }
+    val urgentTasks = incompleteTasks.filter { it.priority == Priority.URGENT || it.priority == Priority.HIGH }
+    val nextIncompleteSubtasks = incompleteTasks.flatMap { t -> t.subtasks.filter { !it.isCompleted }.map { sub -> Pair(t, sub) } }
+
+    if (q.contains("prioritize") || q.contains("next") || q.contains("what should i") || q.contains("focus")) {
+      return if (nextIncompleteSubtasks.isNotEmpty()) {
+        val top = nextIncompleteSubtasks.first()
+        buildString {
+          appendLine("🎯 **Immediate Next Action:**")
+          appendLine("Start with **\"${top.second.title}\"** (${top.second.estimatedMinutes} mins) under *${top.first.title}*.")
+          appendLine()
+          appendLine("💡 **Why this first?** It's tagged as **${top.second.priority.name}** priority in **${top.first.category.label}**.")
+          if (nextIncompleteSubtasks.size > 1) {
+            val second = nextIncompleteSubtasks[1]
+            appendLine()
+            appendLine("📋 **On deck right after:**")
+            appendLine("• ${second.second.title} (${second.second.estimatedMinutes}m)")
+          }
+          appendLine()
+          appendLine("Ready? Set a timer and dedicate 20 minutes of distraction-free execution!")
+        }
+      } else {
+        "🎉 You currently have all your sub-tasks marked as completed! Create a new goal or breakdown in the Breakdown tab to get started."
+      }
+    }
+
+    if (q.contains("analyze") || q.contains("workload") || q.contains("status") || q.contains("summary") || q.contains("bottleneck")) {
+      val totalEstMin = incompleteTasks.sumOf { it.totalEstimatedMinutes }
+      val totalHours = String.format(Locale.getDefault(), "%.1f", totalEstMin / 60f)
+      return buildString {
+        appendLine("📊 **Workload Analysis & Insights:**")
+        appendLine("• **Active Tasks:** ${incompleteTasks.size} (${tasks.count { it.isFullyCompleted }} completed)")
+        appendLine("• **Pending Subtasks:** ${nextIncompleteSubtasks.size} steps")
+        appendLine("• **Estimated Remaining Effort:** ~$totalHours hours total ($totalEstMin minutes)")
+        appendLine()
+        if (urgentTasks.isNotEmpty()) {
+          appendLine("⚠️ **High-Priority Watchlist:**")
+          urgentTasks.forEach { t ->
+            val due = t.formattedDeadline()?.let { " (Due: $it)" } ?: ""
+            appendLine("• **${t.title}** [${t.priority.name}]$due — ${t.completedSubtasksCount}/${t.totalSubtasksCount} steps completed")
+          }
+          appendLine()
+        }
+        appendLine("💡 **Recommendation:** Cluster similar category tasks into uninterrupted 45-minute focus sprints to avoid context switching.")
+      }
+    }
+
+    if (q.contains("motivat") || q.contains("procrastinat") || q.contains("stuck") || q.contains("tired") || q.contains("overwhelm")) {
+      return buildString {
+        appendLine("🔥 **Momentum Blueprint:**")
+        appendLine("When resistance feels high, remember: *action creates motivation, not the other way around.*")
+        appendLine()
+        appendLine("1. **The 2-Minute Rule:** Pick just ONE tiny step and commit to 2 minutes only.")
+        if (nextIncompleteSubtasks.isNotEmpty()) {
+          appendLine("2. **Your easiest micro-step:** \"${nextIncompleteSubtasks.first().second.title}\"")
+        }
+        appendLine("3. **Remove friction:** Silence notifications and open your primary tool.")
+        appendLine()
+        appendLine("You've got this! Start with step 1 right now.")
+      }
+    }
+
+    if (q.contains("schedule") || q.contains("today") || q.contains("plan")) {
+      return buildString {
+        appendLine("🗓️ **Suggested Time-Blocked Schedule for Today:**")
+        var currentSlotMinutes = 0
+        nextIncompleteSubtasks.take(4).forEachIndexed { index, (task, sub) ->
+          val block = when (index) {
+            0 -> "Block 1 (Morning Focus)"
+            1 -> "Block 2 (Deep Work)"
+            2 -> "Block 3 (Mid-Day Push)"
+            else -> "Block 4 (Wrap Up)"
+          }
+          appendLine("• **$block:** ${sub.title} (~${sub.estimatedMinutes}m • *${task.title}*)")
+          currentSlotMinutes += sub.estimatedMinutes
+        }
+        appendLine()
+        appendLine("⏱️ Total scheduled execution time: ~$currentSlotMinutes mins. Take 5-10 min breaks between blocks!")
+      }
+    }
+
+    return buildString {
+      appendLine("Hello! I am your **TaskLogic AI Coach**.")
+      appendLine("I have analyzed your workspace with **${incompleteTasks.size} active tasks** and **${nextIncompleteSubtasks.size} pending steps**.")
+      appendLine()
+      appendLine("Here is how I can assist you today:")
+      appendLine("• ⚡ **Prioritize:** Tell me what you want to achieve today")
+      appendLine("• 📊 **Analyze:** Ask for a workload breakdown and bottleneck scan")
+      appendLine("• 🎯 **Break Down:** Ask for strategy advice on any specific task")
+      appendLine("• ⏰ **Schedule:** Ask to create an optimal day schedule")
+      appendLine()
+      appendLine("How can I support your productivity right now?")
+    }
+  }
 }
+

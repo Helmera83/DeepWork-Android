@@ -10,6 +10,8 @@ import com.example.data.ai.VoiceConversationManager
 import com.example.data.calendar.CalendarIntegrationManager
 import com.example.data.crypto.CryptoManager
 import com.example.data.local.AppDatabase
+import com.example.data.model.ChatMessage
+import com.example.data.model.ChatSender
 import com.example.data.model.Priority
 import com.example.data.model.SubTask
 import com.example.data.model.Task
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class ActiveTimerState(
   val isRunning: Boolean = false,
@@ -91,6 +94,13 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
   private val _lastAiExplanation = MutableStateFlow<String?>(null)
   val lastAiExplanation: StateFlow<String?> = _lastAiExplanation.asStateFlow()
 
+  // AI Chatbot State
+  private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+  val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
+
+  private val _isChatThinking = MutableStateFlow(false)
+  val isChatThinking: StateFlow<Boolean> = _isChatThinking.asStateFlow()
+
   // UI Feedback Toast/Snackbar
   private val _uiFeedback = MutableStateFlow<UiFeedback?>(null)
   val uiFeedback: StateFlow<UiFeedback?> = _uiFeedback.asStateFlow()
@@ -154,8 +164,24 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     description: String = "",
     deadlineTimestamp: Long? = null
   ) {
+    generateAiTaskBreakdown(
+      title = title,
+      userCategory = null,
+      userPriority = null,
+      description = description,
+      deadlineTimestamp = deadlineTimestamp
+    )
+  }
+
+  fun generateAiTaskBreakdown(
+    title: String,
+    userCategory: TaskCategory? = null,
+    userPriority: Priority? = null,
+    description: String = "",
+    deadlineTimestamp: Long? = null
+  ) {
     if (title.isBlank()) {
-      _uiFeedback.value = UiFeedback("Please enter a task title", isError = true)
+      _uiFeedback.value = UiFeedback("Please enter a task title or description", isError = true)
       return
     }
 
@@ -197,7 +223,8 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     estimatedMinutes: Int,
     notes: String,
     priority: Priority = Priority.MEDIUM,
-    categoryTag: String = "General"
+    categoryTag: String = "General",
+    dueDateTimestamp: Long? = null
   ) {
     if (title.isBlank()) return
     viewModelScope.launch {
@@ -207,9 +234,24 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         estimatedMinutes = estimatedMinutes,
         notes = notes,
         priority = priority,
-        categoryTag = categoryTag
+        categoryTag = categoryTag,
+        dueDateTimestamp = dueDateTimestamp
       )
       _uiFeedback.value = UiFeedback("Sub-task added")
+    }
+  }
+
+  fun autoScheduleSubtasksWithAi(task: Task) {
+    viewModelScope.launch {
+      try {
+        val scheduled = repository.autoScheduleSubtasksWithAi(task)
+        if (_selectedTask.value?.id == task.id) {
+          _selectedTask.value = task.copy(subtasks = scheduled)
+        }
+        _uiFeedback.value = UiFeedback("AI scheduled due dates for ${scheduled.size} subtasks")
+      } catch (e: Exception) {
+        _uiFeedback.value = UiFeedback("Failed to schedule subtask due dates: ${e.message}", isError = true)
+      }
     }
   }
 
@@ -250,6 +292,83 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
       }
       _uiFeedback.value = UiFeedback("Task deleted")
     }
+  }
+
+  fun updateTask(task: Task) {
+    viewModelScope.launch {
+      repository.updateTask(task)
+      if (_selectedTask.value?.id == task.id) {
+        _selectedTask.value = task
+      }
+      _uiFeedback.value = UiFeedback("Task updated successfully")
+    }
+  }
+
+  fun updateTaskDetails(
+    task: Task,
+    title: String,
+    description: String,
+    deadlineTimestamp: Long?
+  ) {
+    viewModelScope.launch {
+      val updated = task.copy(
+        title = title,
+        description = description,
+        deadlineTimestamp = deadlineTimestamp,
+        updatedAt = System.currentTimeMillis()
+      )
+      repository.updateTask(updated)
+      _uiFeedback.value = UiFeedback("Task rescheduled")
+    }
+  }
+
+  // --- AI Task Coach Chatbot ---
+  fun sendChatMessage(prompt: String) {
+    val trimmed = prompt.trim()
+    if (trimmed.isBlank() || _isChatThinking.value) return
+
+    val userMessage = ChatMessage(
+      id = UUID.randomUUID().toString(),
+      content = trimmed,
+      sender = ChatSender.USER,
+      timestamp = System.currentTimeMillis()
+    )
+
+    val updatedHistory = _chatMessages.value + userMessage
+    _chatMessages.value = updatedHistory
+
+    viewModelScope.launch {
+      _isChatThinking.value = true
+      try {
+        val currentAllTasks = tasks.value
+        val response = geminiService.chatWithTaskCoach(
+          userMessage = trimmed,
+          tasks = currentAllTasks,
+          conversationHistory = updatedHistory
+        )
+        val assistantMessage = ChatMessage(
+          id = UUID.randomUUID().toString(),
+          content = response,
+          sender = ChatSender.ASSISTANT,
+          timestamp = System.currentTimeMillis()
+        )
+        _chatMessages.value = _chatMessages.value + assistantMessage
+      } catch (e: Exception) {
+        val errorMsg = ChatMessage(
+          id = UUID.randomUUID().toString(),
+          content = "I encountered an issue analyzing your workspace tasks. Let's try breaking down your next action step manually!",
+          sender = ChatSender.ASSISTANT,
+          timestamp = System.currentTimeMillis()
+        )
+        _chatMessages.value = _chatMessages.value + errorMsg
+      } finally {
+        _isChatThinking.value = false
+      }
+    }
+  }
+
+  fun clearChat() {
+    _chatMessages.value = emptyList()
   }
 
   // --- Focus Timer ---

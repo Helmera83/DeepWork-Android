@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -30,12 +32,15 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,6 +70,10 @@ import com.example.ui.theme.PriorityLowColor
 import com.example.ui.theme.PriorityMediumColor
 import com.example.ui.theme.PriorityUrgentColor
 
+/**
+ * A streamlined, high-contrast task card featuring clean typography,
+ * progress tracking, collapsible milestones, and subtask management.
+ */
 @Composable
 fun TaskCard(
   task: Task,
@@ -72,6 +81,7 @@ fun TaskCard(
   onStartTimer: (SubTask) -> Unit,
   onDeleteSubtask: (SubTask) -> Unit,
   onDeleteTask: () -> Unit,
+  onEditTask: (Task) -> Unit = {},
   onExportCalendar: () -> Unit,
   onAddSubtask: () -> Unit,
   onGenerateAiSubtasks: () -> Unit = {},
@@ -81,32 +91,31 @@ fun TaskCard(
   val progress = task.completionProgress
   val animatedProgress by animateFloatAsState(targetValue = progress, label = "task_progress")
 
-  // State to track expansion of individual milestones
   val milestoneExpandedMap = remember(task.id) {
     mutableStateMapOf<String, Boolean>().apply {
       task.milestones.forEach { put(it.id, true) }
     }
   }
 
-  Surface(
+  OutlinedCard(
     modifier = modifier
       .fillMaxWidth()
       .testTag("task_card_${task.id}"),
-    shape = RoundedCornerShape(22.dp),
-    color = MaterialTheme.colorScheme.surface,
-    border = androidx.compose.foundation.BorderStroke(
-      1.dp,
-      MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.outlinedCardColors(
+      containerColor = MaterialTheme.colorScheme.surface
     ),
-    tonalElevation = 2.dp,
-    shadowElevation = 3.dp
+    border = BorderStroke(
+      width = 1.5.dp,
+      color = MaterialTheme.colorScheme.outlineVariant
+    )
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
         .padding(16.dp)
     ) {
-      // Header: L1 Root Goal Badge, Category, Priority, Vault Badge, and Delete
+      // Header: Category, Priority, Vault Badge & Actions (Edit & Delete)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -114,23 +123,8 @@ fun TaskCard(
       ) {
         Row(
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          // Level 1 Root Goal Badge
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.primaryContainer
-          ) {
-            Text(
-              text = "L1 ROOT GOAL",
-              fontSize = 10.sp,
-              fontWeight = FontWeight.Bold,
-              letterSpacing = 0.5.sp,
-              color = MaterialTheme.colorScheme.onPrimaryContainer,
-              modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-            )
-          }
-
           CategoryBadge(category = task.category)
           PriorityBadge(priority = task.priority)
 
@@ -138,9 +132,9 @@ fun TaskCard(
             Row(
               verticalAlignment = Alignment.CenterVertically,
               modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))
-                .padding(horizontal = 6.dp, vertical = 3.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
               Icon(
                 imageVector = Icons.Default.Lock,
@@ -150,7 +144,7 @@ fun TaskCard(
               )
               Spacer(modifier = Modifier.width(3.dp))
               Text(
-                text = "Vault",
+                text = "Encrypted",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.tertiary
@@ -159,20 +153,42 @@ fun TaskCard(
           }
         }
 
-        IconButton(
-          onClick = onDeleteTask,
-          modifier = Modifier.size(28.dp)
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-          Icon(
-            imageVector = Icons.Default.DeleteOutline,
-            contentDescription = "Delete Task",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.size(16.dp)
-          )
+          IconButton(
+            onClick = { onEditTask(task) },
+            modifier = Modifier
+              .size(32.dp)
+              .testTag("edit_task_btn_${task.id}")
+          ) {
+            Icon(
+              imageVector = Icons.Default.Edit,
+              contentDescription = "Edit Task",
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+          }
+
+          IconButton(
+            onClick = onDeleteTask,
+            modifier = Modifier
+              .size(32.dp)
+              .testTag("delete_task_btn_${task.id}")
+          ) {
+            Icon(
+              imageVector = Icons.Default.DeleteOutline,
+              contentDescription = "Delete Task",
+              tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+              modifier = Modifier.size(18.dp)
+            )
+          }
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+
+      Spacer(modifier = Modifier.height(8.dp))
 
       // Task Title
       Text(
@@ -190,11 +206,12 @@ fun TaskCard(
           fontSize = 13.sp,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = if (isExpanded) 3 else 1,
-          overflow = TextOverflow.Ellipsis
+          overflow = TextOverflow.Ellipsis,
+          lineHeight = 18.sp
         )
       }
 
-      // Deadline (if set)
+      // Deadline (if present)
       task.formattedDeadline()?.let { deadline ->
         Spacer(modifier = Modifier.height(6.dp))
         Row(
@@ -208,7 +225,7 @@ fun TaskCard(
           )
           Spacer(modifier = Modifier.width(4.dp))
           Text(
-            text = "Target Deadline: $deadline",
+            text = "Due $deadline",
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = ExpressiveAmber
@@ -218,7 +235,7 @@ fun TaskCard(
 
       Spacer(modifier = Modifier.height(12.dp))
 
-      // Overall Progress bar & Rollup Across All Milestones
+      // Overall Progress Bar & Meta Summary
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -231,30 +248,21 @@ fun TaskCard(
             tint = if (task.isFullyCompleted) EmeraldSuccess else MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(14.dp)
           )
-          Spacer(modifier = Modifier.width(5.dp))
+          Spacer(modifier = Modifier.width(4.dp))
           Text(
-            text = "${task.completedSubtasksCount} of ${task.totalSubtasksCount} sub-tasks (${(progress * 100).toInt()}%)",
+            text = "${task.completedSubtasksCount} of ${task.totalSubtasksCount} completed (${(progress * 100).toInt()}%)",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
           )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Icon(
-            imageVector = Icons.Default.Schedule,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(13.dp)
-          )
-          Spacer(modifier = Modifier.width(4.dp))
-          Text(
-            text = "${task.totalEstimatedMinutes}m est. total",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
+        Text(
+          text = "${task.totalEstimatedMinutes}m total",
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Medium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
       }
 
       Spacer(modifier = Modifier.height(6.dp))
@@ -271,7 +279,7 @@ fun TaskCard(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Expand / Collapse Bar & Quick Calendar Sync Action
+      // Milestones Toggle & Calendar Export Action
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -285,7 +293,7 @@ fun TaskCard(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Text(
-            text = if (isExpanded) "Hide Milestones (${task.milestones.size})" else "View Milestones (${task.milestones.size})",
+            text = if (isExpanded) "Hide Steps (${task.subtasks.size})" else "Show Steps (${task.subtasks.size})",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary
@@ -300,8 +308,8 @@ fun TaskCard(
 
         FilledTonalButton(
           onClick = onExportCalendar,
-          modifier = Modifier.height(30.dp),
-          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+          modifier = Modifier.height(32.dp),
+          contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp),
           shape = RoundedCornerShape(10.dp),
           colors = ButtonDefaults.filledTonalButtonColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -310,7 +318,7 @@ fun TaskCard(
         ) {
           Icon(
             imageVector = Icons.Default.CalendarMonth,
-            contentDescription = "Sync to Calendar",
+            contentDescription = "Export to Calendar",
             modifier = Modifier.size(13.dp)
           )
           Spacer(modifier = Modifier.width(4.dp))
@@ -318,23 +326,23 @@ fun TaskCard(
         }
       }
 
-      // Milestones Breakdown List (Each Milestone is a Toggled Heading with Subtasks & Progress Rollup)
+      // Milestones & Subtasks Section
       AnimatedVisibility(visible = isExpanded) {
         Column(
           modifier = Modifier
             .fillMaxWidth()
             .padding(top = 10.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
+          verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
           val milestones = task.milestones
           if (milestones.isEmpty()) {
             Surface(
               modifier = Modifier.fillMaxWidth(),
               shape = RoundedCornerShape(12.dp),
-              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ) {
               Text(
-                text = "No subtasks yet. Click below to generate AI milestones or add steps manually.",
+                text = "No subtasks yet. Click below to add steps or generate AI milestones.",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(14.dp)
@@ -358,14 +366,13 @@ fun TaskCard(
             }
           }
 
-          // Subtask addition action row (AI + Manual)
+          // Action Buttons: AI More Subtasks & Manual Add
           Row(
             modifier = Modifier
               .fillMaxWidth()
               .padding(top = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            // AI Generate More Button
             Surface(
               shape = RoundedCornerShape(12.dp),
               color = MaterialTheme.colorScheme.primaryContainer,
@@ -401,7 +408,6 @@ fun TaskCard(
               }
             }
 
-            // Manual Add Step Button
             OutlinedButton(
               onClick = onAddSubtask,
               modifier = Modifier
@@ -419,12 +425,6 @@ fun TaskCard(
   }
 }
 
-/**
- * Milestone Section Component:
- * - Rendered as a toggled/collapsible heading.
- * - Displays progress rollup (completed count, percentage, progress bar, estimated time) from its child subtasks.
- * - Checkboxes are exclusively on subtasks (Level 2 and subsequent levels), not on the milestone header itself.
- */
 @Composable
 private fun MilestoneSection(
   milestone: Milestone,
@@ -442,32 +442,45 @@ private fun MilestoneSection(
     label = "milestone_progress_${milestone.id}"
   )
 
-  Surface(
-    modifier = modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(16.dp),
-    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-    border = androidx.compose.foundation.BorderStroke(
-      1.dp,
-      if (milestone.isCompleted) {
-        EmeraldSuccess.copy(alpha = 0.4f)
-      } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-      }
+  // Tone-based container colors for filled milestone cards
+  val toneBackgroundColor = when {
+    milestone.isCompleted -> EmeraldSuccess.copy(alpha = 0.12f)
+    milestoneIndex % 4 == 0 -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    milestoneIndex % 4 == 1 -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+    milestoneIndex % 4 == 2 -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+    else -> MaterialTheme.colorScheme.surfaceVariant
+  }
+
+  val toneBadgeColor = when {
+    milestone.isCompleted -> EmeraldSuccess
+    milestoneIndex % 4 == 0 -> MaterialTheme.colorScheme.primary
+    milestoneIndex % 4 == 1 -> MaterialTheme.colorScheme.secondary
+    milestoneIndex % 4 == 2 -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+  }
+
+  Card(
+    modifier = modifier
+      .fillMaxWidth()
+      .testTag("milestone_card_${milestone.id}"),
+    shape = RoundedCornerShape(14.dp),
+    colors = CardDefaults.cardColors(
+      containerColor = toneBackgroundColor
     ),
-    tonalElevation = 1.dp
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
         .padding(12.dp)
     ) {
-      // Milestone Toggled Heading
+      // Milestone Heading
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .clip(RoundedCornerShape(10.dp))
+          .clip(RoundedCornerShape(8.dp))
           .clickable(onClick = onToggleExpand)
-          .padding(vertical = 4.dp),
+          .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
       ) {
@@ -475,37 +488,28 @@ private fun MilestoneSection(
           verticalAlignment = Alignment.CenterVertically,
           modifier = Modifier.weight(1f)
         ) {
-          // 1st Level Milestone Badge (NO checkbox on milestone heading itself!)
           Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = if (milestone.isCompleted) EmeraldSuccess else MaterialTheme.colorScheme.secondaryContainer
+            shape = RoundedCornerShape(6.dp),
+            color = toneBadgeColor
           ) {
             Row(
               verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
               if (milestone.isCompleted) {
                 Icon(
                   imageVector = Icons.Default.Check,
-                  contentDescription = "Milestone Completed",
-                  tint = Color.White,
-                  modifier = Modifier.size(11.dp)
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-              } else {
-                Icon(
-                  imageVector = Icons.Default.Flag,
                   contentDescription = null,
-                  tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                  modifier = Modifier.size(11.dp)
+                  tint = Color.White,
+                  modifier = Modifier.size(10.dp)
                 )
-                Spacer(modifier = Modifier.width(3.dp))
+                Spacer(modifier = Modifier.width(2.dp))
               }
               Text(
-                text = "M${milestoneIndex + 1}",
+                text = "Phase ${milestoneIndex + 1}",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (milestone.isCompleted) Color.White else MaterialTheme.colorScheme.onSecondaryContainer
+                color = Color.White
               )
             }
           }
@@ -516,70 +520,50 @@ private fun MilestoneSection(
             Text(
               text = milestone.title,
               fontSize = 13.sp,
-              fontWeight = FontWeight.Bold,
+              fontWeight = FontWeight.SemiBold,
               color = MaterialTheme.colorScheme.onSurface,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
 
-            // Progress Rollup on the 1st Level Milestone Heading
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-              Text(
-                text = "${milestone.completedSubtasksCount}/${milestone.totalSubtasksCount} completed • ${(milestone.completionProgress * 100).toInt()}%",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (milestone.isCompleted) EmeraldSuccess else MaterialTheme.colorScheme.primary
-              )
-              Text(
-                text = "•",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-              Text(
-                text = "${milestone.totalEstimatedMinutes}m",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
+            Text(
+              text = "${milestone.completedSubtasksCount}/${milestone.totalSubtasksCount} steps completed • ${milestone.totalEstimatedMinutes}m",
+              fontSize = 10.sp,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
           }
         }
 
         IconButton(
           onClick = onToggleExpand,
-          modifier = Modifier.size(24.dp)
+          modifier = Modifier.size(28.dp)
         ) {
           Icon(
             imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = if (isExpanded) "Collapse Milestone" else "Expand Milestone",
+            contentDescription = if (isExpanded) "Collapse" else "Expand",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp)
           )
         }
       }
 
-      // Milestone Mini Progress Rollup Bar
-      Spacer(modifier = Modifier.height(6.dp))
+      Spacer(modifier = Modifier.height(4.dp))
       LinearProgressIndicator(
         progress = { animatedMilestoneProgress },
         modifier = Modifier
           .fillMaxWidth()
-          .height(4.dp)
+          .height(3.dp)
           .clip(RoundedCornerShape(2.dp)),
-        color = if (milestone.isCompleted) EmeraldSuccess else MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.surfaceVariant
+        color = if (milestone.isCompleted) EmeraldSuccess else toneBadgeColor,
+        trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
       )
 
-      // Milestone Subtasks List (Checkboxes at Level 2 and subsequent levels)
       AnimatedVisibility(visible = isExpanded) {
         Column(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(top = 8.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
           milestone.subtasks.forEachIndexed { subIndex, subtask ->
             SubTaskItem(
@@ -598,9 +582,9 @@ private fun MilestoneSection(
 }
 
 @Composable
-private fun CategoryBadge(category: TaskCategory) {
+internal fun CategoryBadge(category: TaskCategory) {
   Surface(
-    shape = RoundedCornerShape(8.dp),
+    shape = RoundedCornerShape(6.dp),
     color = MaterialTheme.colorScheme.surfaceVariant
   ) {
     Text(
@@ -614,7 +598,7 @@ private fun CategoryBadge(category: TaskCategory) {
 }
 
 @Composable
-private fun PriorityBadge(priority: Priority) {
+internal fun PriorityBadge(priority: Priority) {
   val (color, label) = when (priority) {
     Priority.LOW -> Pair(PriorityLowColor, "Low")
     Priority.MEDIUM -> Pair(PriorityMediumColor, "Med")
@@ -625,7 +609,7 @@ private fun PriorityBadge(priority: Priority) {
   Row(
     verticalAlignment = Alignment.CenterVertically,
     modifier = Modifier
-      .clip(RoundedCornerShape(8.dp))
+      .clip(RoundedCornerShape(6.dp))
       .background(color.copy(alpha = 0.12f))
       .padding(horizontal = 7.dp, vertical = 3.dp)
   ) {

@@ -19,63 +19,67 @@ enum class AppThemeMode {
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = BaselinePrimaryDark,
-    onPrimary = Color(0xFF0D243B),
-    primaryContainer = BaselinePrimaryContainerDark, // #263a52
-    onPrimaryContainer = Color(0xFFD6E3F3),
-    secondary = ToneSlateSecondaryDark,
-    onSecondary = Color(0xFF14202F),
-    secondaryContainer = ToneSlateSecondaryContainerDark,
-    onSecondaryContainer = Color(0xFFDCE8F6),
-    tertiary = ToneTealTertiaryDark,
-    onTertiary = Color(0xFF082631),
-    tertiaryContainer = ToneTealTertiaryContainerDark,
-    onTertiaryContainer = Color(0xFFD5EDF5),
-    background = ToneDarkBackground,
-    onBackground = ToneDarkTextPrimary,
-    surface = ToneDarkSurface,
-    onSurface = ToneDarkTextPrimary,
-    surfaceVariant = ToneDarkSurfaceVariant,
-    onSurfaceVariant = ToneDarkTextSecondary,
-    surfaceContainer = ToneDarkSurfaceContainer,
-    surfaceContainerHigh = ToneDarkSurfaceContainerHigh,
-    outline = ToneDarkBorder,
-    outlineVariant = Color(0xFF2C3746),
+    primary = HyperCyan, // 0xFF00EAEA
+    onPrimary = Color(0xFF002020),
+    primaryContainer = BrandSecondary, // 0xFF2D6767
+    onPrimaryContainer = BrandSecondaryContainer, // 0xFFB0EAEA
+    secondary = BrandSecondaryContainer, // 0xFFB0EAEA
+    onSecondary = Color(0xFF002020),
+    secondaryContainer = BrandSecondary,
+    onSecondaryContainer = Color(0xFFEAF3F1),
+    tertiary = BrandTertiaryContainer, // 0xFFD3CDFF
+    onTertiary = Color(0xFF1A163D),
+    tertiaryContainer = BrandTertiary,
+    onTertiaryContainer = Color(0xFFE4DFFF),
+    background = DarkBackground, // 0xFF101818
+    onBackground = DarkTextPrimary, // 0xFFF2FBFA
+    surface = DarkSurface, // 0xFF151D1D
+    onSurface = DarkTextPrimary, // 0xFFF2FBFA
+    surfaceVariant = DarkSurfaceContainerHigh,
+    onSurfaceVariant = DarkTextSecondary,
+    surfaceContainer = DarkSurfaceContainer,
+    surfaceContainerHigh = DarkSurfaceContainerHigh,
+    surfaceContainerHighest = Color(0xFF2E3B3A),
+    surfaceContainerLow = Color(0xFF121919),
+    outline = DarkBorderOutline,
+    outlineVariant = DarkBorderOutlineVariant,
     error = ExpressiveCoralDark,
-    onError = Color(0xFF4C0519)
+    onError = Color(0xFF450A0A)
   )
 
 private val LightColorScheme =
   lightColorScheme(
-    primary = BaselinePrimaryLight, // #263a52
+    primary = BrandPrimary, // 0xFF006A6A
     onPrimary = Color.White,
-    primaryContainer = BaselinePrimaryContainerLight,
-    onPrimaryContainer = Color(0xFF0F1E2E),
-    secondary = ToneSlateSecondary,
+    primaryContainer = BrandPrimaryContainer, // 0xFF00EAEA
+    onPrimaryContainer = BrandOnPrimaryContainer, // 0xFF006565
+    secondary = BrandSecondary, // 0xFF2D6767
     onSecondary = Color.White,
-    secondaryContainer = ToneSlateSecondaryContainer,
-    onSecondaryContainer = Color(0xFF14202F),
-    tertiary = ToneTealTertiary,
+    secondaryContainer = BrandSecondaryContainer, // 0xFFB0EAEA
+    onSecondaryContainer = BrandOnSecondaryContainer, // 0xFF316B6C
+    tertiary = BrandTertiary, // 0xFF5E5984
     onTertiary = Color.White,
-    tertiaryContainer = ToneTealTertiaryContainer,
-    onTertiaryContainer = Color(0xFF082631),
-    background = ToneLightBackground,
-    onBackground = ToneLightTextPrimary,
-    surface = ToneLightSurface,
-    onSurface = ToneLightTextPrimary,
-    surfaceVariant = ToneLightSurfaceVariant,
-    onSurfaceVariant = ToneLightTextSecondary,
-    surfaceContainer = ToneLightSurfaceContainer,
-    surfaceContainerHigh = ToneLightSurfaceContainerHigh,
-    outline = ToneLightBorder,
-    outlineVariant = Color(0xFFE0E7EE),
+    tertiaryContainer = BrandTertiaryContainer, // 0xFFD3CDFF
+    onTertiaryContainer = BrandOnTertiaryContainer, // 0xFF595580
+    background = SurfaceBase, // 0xFFF2FBFA
+    onBackground = TextPrimary, // 0xFF151D1D
+    surface = SurfaceBase, // 0xFFF2FBFA
+    onSurface = TextPrimary, // 0xFF151D1D
+    surfaceVariant = SurfaceContainerHighest, // 0xFFDBE4E3
+    onSurfaceVariant = TextSecondary, // 0xFF3B4A49
+    surfaceContainer = SurfaceContainerDefault, // 0xFFE7F0EE
+    surfaceContainerHigh = SurfaceContainerHigh, // 0xFFE1EAE9
+    surfaceContainerHighest = SurfaceContainerHighest, // 0xFFDBE4E3
+    surfaceContainerLow = SurfaceContainerLow, // 0xFFECF5F4
+    outline = BorderOutline, // 0xFF6A7A7A
+    outlineVariant = BorderOutlineVariant, // 0xFFB9CAC9
     error = ExpressiveCoral,
     onError = Color.White
   )
 
 @Composable
 fun TaskBreakTheme(
-  themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+  themeMode: AppThemeMode = AppThemeMode.LIGHT,
   dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) {
@@ -102,4 +106,6 @@ fun TaskBreakTheme(
     content = content
   )
 }
+
+
 

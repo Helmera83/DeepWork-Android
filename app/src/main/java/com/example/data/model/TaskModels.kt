@@ -64,6 +64,7 @@ data class SyncAccount(
 data class SubTask(
   val id: String,
   val taskId: String,
+  val milestoneId: String? = null,
   val title: String,
   val estimatedMinutes: Int,
   val actualMinutes: Int = 0,
@@ -75,13 +76,44 @@ data class SubTask(
   val categoryTag: String = "",
   val scheduledStartTime: Long? = null,
   val scheduledEndTime: Long? = null,
+  val dueDateTimestamp: Long? = null,
   val calendarEventId: String? = null
-)
+) {
+  fun formattedDueDate(): String? {
+    val targetTime = dueDateTimestamp ?: scheduledEndTime ?: scheduledStartTime
+    if (targetTime == null || targetTime <= 0L) return null
+    val now = System.currentTimeMillis()
+    val calNow = java.util.Calendar.getInstance().apply { timeInMillis = now }
+    val calDue = java.util.Calendar.getInstance().apply { timeInMillis = targetTime }
+
+    val isSameDay = calNow.get(java.util.Calendar.YEAR) == calDue.get(java.util.Calendar.YEAR) &&
+        calNow.get(java.util.Calendar.DAY_OF_YEAR) == calDue.get(java.util.Calendar.DAY_OF_YEAR)
+
+    val isTomorrow = calNow.get(java.util.Calendar.YEAR) == calDue.get(java.util.Calendar.YEAR) &&
+        calNow.get(java.util.Calendar.DAY_OF_YEAR) + 1 == calDue.get(java.util.Calendar.DAY_OF_YEAR)
+
+    return when {
+      isSameDay -> "Due Today"
+      isTomorrow -> "Due Tomorrow"
+      else -> {
+        val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
+        "Due ${sdf.format(Date(targetTime))}"
+      }
+    }
+  }
+
+  fun isOverdue(): Boolean {
+    val targetTime = dueDateTimestamp ?: scheduledEndTime
+    if (targetTime == null || targetTime <= 0L || isCompleted) return false
+    return System.currentTimeMillis() > targetTime
+  }
+}
 
 data class Milestone(
   val id: String,
+  val taskId: String = "",
   val title: String,
-  val orderIndex: Int,
+  val orderIndex: Int = 0,
   val subtasks: List<SubTask> = emptyList()
 ) {
   val completedSubtasksCount: Int
@@ -114,7 +146,8 @@ data class Task(
   val updatedAt: Long = System.currentTimeMillis(),
   val syncState: SyncState = SyncState.PENDING_SYNC,
   val isEncrypted: Boolean = false,
-  val subtasks: List<SubTask> = emptyList()
+  val subtasks: List<SubTask> = emptyList(),
+  val storedMilestones: List<Milestone> = emptyList()
 ) {
   val totalEstimatedMinutes: Int
     get() = subtasks.sumOf { it.estimatedMinutes }
@@ -134,8 +167,14 @@ data class Task(
   val isFullyCompleted: Boolean
     get() = subtasks.isNotEmpty() && subtasks.all { it.isCompleted }
 
+  val subTasks: List<SubTask>
+    get() = subtasks
+
   val milestones: List<Milestone>
     get() {
+      if (storedMilestones.isNotEmpty()) {
+        return storedMilestones
+      }
       if (subtasks.isEmpty()) return emptyList()
       val hasExplicitMilestones = subtasks.any { it.milestoneTitle.isNotBlank() }
       if (hasExplicitMilestones) {
@@ -148,6 +187,7 @@ data class Task(
         return groups.entries.mapIndexed { index, entry ->
           Milestone(
             id = "ms_${id}_$index",
+            taskId = id,
             title = entry.key,
             orderIndex = index,
             subtasks = entry.value
@@ -166,6 +206,7 @@ data class Task(
           }
           Milestone(
             id = "ms_${id}_$index",
+            taskId = id,
             title = phaseName,
             orderIndex = index,
             subtasks = chunkList
@@ -179,4 +220,49 @@ data class Task(
     val sdf = SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault())
     return sdf.format(Date(deadlineTimestamp))
   }
+
+  fun formattedDueDate(): String? {
+    val targetTime = deadlineTimestamp
+    if (targetTime == null || targetTime <= 0L) return null
+    val now = System.currentTimeMillis()
+    val calNow = java.util.Calendar.getInstance().apply { timeInMillis = now }
+    val calDue = java.util.Calendar.getInstance().apply { timeInMillis = targetTime }
+
+    val isSameDay = calNow.get(java.util.Calendar.YEAR) == calDue.get(java.util.Calendar.YEAR) &&
+        calNow.get(java.util.Calendar.DAY_OF_YEAR) == calDue.get(java.util.Calendar.DAY_OF_YEAR)
+
+    val isTomorrow = calNow.get(java.util.Calendar.YEAR) == calDue.get(java.util.Calendar.YEAR) &&
+        calNow.get(java.util.Calendar.DAY_OF_YEAR) + 1 == calDue.get(java.util.Calendar.DAY_OF_YEAR)
+
+    return when {
+      isSameDay -> "Due Today"
+      isTomorrow -> "Due Tomorrow"
+      else -> {
+        val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
+        "Due ${sdf.format(Date(targetTime))}"
+      }
+    }
+  }
+
+  fun isOverdue(): Boolean {
+    val targetTime = deadlineTimestamp
+    if (targetTime == null || targetTime <= 0L || isFullyCompleted) return false
+    return System.currentTimeMillis() > targetTime
+  }
 }
+
+enum class ChatSender {
+  USER,
+  ASSISTANT,
+  SYSTEM
+}
+
+data class ChatMessage(
+  val id: String = java.util.UUID.randomUUID().toString(),
+  val sender: ChatSender,
+  val content: String,
+  val timestamp: Long = System.currentTimeMillis(),
+  val suggestedActionTitle: String? = null,
+  val suggestedTaskId: String? = null
+)
+
